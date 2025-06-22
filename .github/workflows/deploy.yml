@@ -1,0 +1,56 @@
+name: CI/CD for modubus
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - '**'
+      - '!.env'
+      - '!node_modules/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH Key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }} # github에 추가해야함 - 수정 -
+
+      - name: Add to known hosts # github에 추가해야함 - 수정 -
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy to Server
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            # 저장소 체크 후 최초면 git clone
+            cd ~/modubus || git clone https://github.com/EternalSoulmate/soulmate_backend.git ~/modubus
+            cd ~/modubus
+            git fetch origin
+            git checkout ${GITHUB_REF_NAME}
+            git pull origin ${GITHUB_REF_NAME}
+
+            # package.json 변경된 경우 npm ci
+            if [ -f package-lock.json ] && git diff --name-only HEAD~1 | grep -qE "package(-lock)?\.json"; then
+              npm ci
+            fi
+
+            # 도커 서비스 재실행
+            docker compose pull
+            docker compose up -d --build
+
+            # 오래된 도커 이미지 정리
+            docker image prune -af
+
+            # 상태 체크
+            docker compose ps
+          EOF

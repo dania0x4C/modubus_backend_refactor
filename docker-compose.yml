@@ -1,0 +1,56 @@
+services:
+  modubus-backend:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./
+    volumes:
+      - ./:/usr/src/app
+    container_name: modubus-backend
+    env_file: .env
+    command: npm run start:debug
+    environment:
+      - PORT=3000
+      - NODE_ENV=local
+    ports:
+      - 3000:3000
+      - 9230:9230
+    depends_on:
+      - postgres
+    networks:
+      - modubus-network
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: qwer1234
+    ports:
+      - 5432:5432
+    volumes:
+      - modubus-db-volume:/var/lib/postgresql/data
+    networks:
+      - modubus-network
+
+  redis:
+    image: redis:7.4.1-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - redis-data:/data
+    networks:
+      - modubus-network
+
+networks:
+  modubus-network:
+    driver: bridge
+
+volumes:
+  modubus-db-volume:
+    driver: local
+
+  redis-data:
+    driver: local
